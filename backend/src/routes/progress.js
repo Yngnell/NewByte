@@ -22,10 +22,10 @@ router.get('/', requireAuth, async (req, res) => {
 async function ensureProgressMapTable(pool) {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS user_progress (
-      id INT AUTO_INCREMENT PRIMARY KEY,
+      id SERIAL PRIMARY KEY,
       user_id INT NOT NULL UNIQUE,
       progress_json TEXT NOT NULL,
-      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     )
   `)

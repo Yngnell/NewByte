@@ -1,64 +1,49 @@
-import Database from 'better-sqlite3'
-import path from 'path'
-import { fileURLToPath } from 'url'
+import pg from 'pg'
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const dbPath = path.join(__dirname, '../../bytestart.db')
+const { Pool } = pg
 
-let db = null
+let pool = null
+
+function convertPlaceholders(sql) {
+  let index = 0
+  return sql.replace(/\?/g, () => `$${++index}`)
+}
+
+function normalizeSql(sql) {
+  return sql
+    .replace(/\bINT AUTO_INCREMENT PRIMARY KEY\b/gi, 'SERIAL PRIMARY KEY')
+    .replace(/\bAUTO_INCREMENT\b/gi, '')
+    .replace(/\bDATETIME\b/gi, 'TIMESTAMP')
+    .replace(/TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP/gi, 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP')
+    .replace(/ENUM\((?:'[^']+'\s*,?\s*)+\)/gi, 'TEXT')
+    .replace(/UNIQUE KEY\s+\w+\s*\(([^)]+)\)/gi, 'UNIQUE ($1)')
+}
+
+function shouldReturnId(sql) {
+  return /^\s*INSERT\b/i.test(sql) && !/\bRETURNING\b/i.test(sql)
+}
 
 export async function createPool() {
-  if (!db) {
-    db = new Database(dbPath)
-    db.pragma('journal_mode = WAL')
+  if (!process.env.DATABASE_URL) {
+    throw new Error('DATABASE_URL is required. Create a PostgreSQL database and set DATABASE_URL in your environment.')
   }
 
-  // Return a wrapper that mimics the mysql2 pool interface
+  if (!pool) {
+    pool = new Pool({
+      connectionString: process.env.DATABASE_URL,
+      ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : undefined,
+    })
+  }
+
   return {
     query: async (sql, params = []) => {
       try {
-        // Convert MySQL syntax to SQLite where needed
-        let sqliteSQL = sql
-          .replace(/AUTO_INCREMENT/g, 'AUTOINCREMENT')
-          .replace(/INT AUTO_INCREMENT PRIMARY KEY/g, 'INTEGER PRIMARY KEY AUTOINCREMENT')
-          .replace(/ENUM\('([^']+)','([^']+)','([^']+)'\)/g, 'TEXT')
-          .replace(/ENUM\('([^']+)','([^']+)'\)/g, 'TEXT')
-          .replace(/TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP/g, 'DATETIME DEFAULT CURRENT_TIMESTAMP')
-          .replace(/DATETIME NULL/g, 'DATETIME')
-          .replace(/BOOLEAN/g, 'INTEGER')
+        let pgSql = convertPlaceholders(normalizeSql(sql))
+        if (shouldReturnId(pgSql)) pgSql = `${pgSql} RETURNING id`
 
-        // Handle CREATE TABLE IF NOT EXISTS
-        if (sqliteSQL.includes('CREATE TABLE')) {
-          const stmt = db.prepare(sqliteSQL)
-          stmt.run(...params)
-          return [[], { insertId: db.lastInsertRowid }]
-        }
-
-        // Handle INSERT
-        if (sqliteSQL.includes('INSERT')) {
-          const stmt = db.prepare(sqliteSQL)
-          const info = stmt.run(...params)
-          return [[], { insertId: info.lastInsertRowid }]
-        }
-
-        // Handle UPDATE
-        if (sqliteSQL.includes('UPDATE')) {
-          const stmt = db.prepare(sqliteSQL)
-          stmt.run(...params)
-          return [[], {}]
-        }
-
-        // Handle DELETE
-        if (sqliteSQL.includes('DELETE')) {
-          const stmt = db.prepare(sqliteSQL)
-          stmt.run(...params)
-          return [[], {}]
-        }
-
-        // Handle SELECT
-        const stmt = db.prepare(sqliteSQL)
-        const rows = stmt.all(...params)
-        return [rows, {}]
+        const result = await pool.query(pgSql, params)
+        const insertId = result.rows?.[0]?.id
+        return [result.rows || [], { insertId }]
       } catch (error) {
         console.error('Database error:', error.message)
         throw error
@@ -66,9 +51,9 @@ export async function createPool() {
     },
 
     end: async () => {
-      if (db) {
-        db.close()
-        db = null
+      if (pool) {
+        await pool.end()
+        pool = null
       }
     },
   }

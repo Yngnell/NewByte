@@ -29,7 +29,7 @@ router.post('/', requireAuth, async (req, res) => {
     const pool = await req.poolPromise
     await pool.query(
       'INSERT INTO quiz_history (user_id, lesson_id, title, score, passed) VALUES (?, ?, ?, ?, ?)',
-      [userId, lessonId, title || lessonId, score, passed ? 1 : 0],
+      [userId, lessonId, title || lessonId, score, Boolean(passed)],
     )
     res.json({ ok: true })
   } catch {

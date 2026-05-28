@@ -5,7 +5,10 @@ import { createPool } from '../src/config/db.js'
 async function run() {
   const pool = await createPool()
   try {
-    const [admins] = await pool.query('SELECT id, email, role FROM users WHERE email="admin@bytestart.local" OR role="admin"')
+    const [admins] = await pool.query(
+      'SELECT id, email, role FROM users WHERE email=? OR role=?',
+      ['admin@bytestart.local', 'admin'],
+    )
     console.log('Admin accounts found:', JSON.stringify(admins, null, 2))
     
     const password = 'Admin123!'

@@ -17,8 +17,8 @@ async function ensureCourse(pool) {
 
 async function ensureLesson(pool, courseId, lesson, order) {
   const [existing] = await pool.query(
-    'SELECT id FROM lessons WHERE course_id=? AND lesson_order=? LIMIT 1',
-    [courseId, order]
+    'SELECT id FROM lessons WHERE id=? LIMIT 1',
+    [lesson.db_id]
   )
 
   const contentSummary = JSON.stringify({
@@ -35,8 +35,8 @@ async function ensureLesson(pool, courseId, lesson, order) {
   }
 
   const [result] = await pool.query(
-    'INSERT INTO lessons (course_id, title, content, lesson_order) VALUES (?, ?, ?, ?)',
-    [courseId, lesson.title, contentSummary, order]
+    'INSERT INTO lessons (id, course_id, title, content, lesson_order) VALUES (?, ?, ?, ?, ?)',
+    [lesson.db_id, courseId, lesson.title, contentSummary, order]
   )
   return result.insertId
 }
@@ -64,8 +64,8 @@ async function syncQuestions(pool, quizId, lessonKey) {
 
     await pool.query(
       `INSERT INTO questions
-        (quiz_id, question_text, image_path, option_a, option_b, option_c, option_d, correct_answer)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        (quiz_id, question_text, image_path, option_a, option_b, option_c, option_d, correct_answer, explanation)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         quizId,
         question.prompt,
@@ -75,6 +75,7 @@ async function syncQuestions(pool, quizId, lessonKey) {
         options[2] || '',
         options[3] || '',
         correctAnswer,
+        question.explanation || null,
       ]
     )
   }
@@ -92,6 +93,9 @@ async function run() {
       await syncQuestions(pool, quizId, lesson.id)
       console.log(`Synced ${lesson.title}`)
     }
+    await pool.query(
+      "SELECT setval(pg_get_serial_sequence('lessons','id'), COALESCE((SELECT MAX(id) FROM lessons), 1), true)"
+    )
 
     console.log('Frontend lessons and quizzes synced to database successfully.')
   } catch (error) {

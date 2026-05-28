@@ -8,10 +8,10 @@ router.use(requireAuth, requireAdmin)
 router.get('/stats', async (req, res) => {
   try {
     const pool = await req.poolPromise
-    const [[{ users }]] = await pool.query('SELECT COUNT(*) AS users FROM users')
-    const [[{ lessons }]] = await pool.query('SELECT COUNT(*) AS lessons FROM lessons')
-    const [[{ quizzes }]] = await pool.query('SELECT COUNT(*) AS quizzes FROM quizzes')
-    const [[{ questions }]] = await pool.query('SELECT COUNT(*) AS questions FROM questions')
+    const [[{ users }]] = await pool.query('SELECT COUNT(*)::int AS users FROM users')
+    const [[{ lessons }]] = await pool.query('SELECT COUNT(*)::int AS lessons FROM lessons')
+    const [[{ quizzes }]] = await pool.query('SELECT COUNT(*)::int AS quizzes FROM quizzes')
+    const [[{ questions }]] = await pool.query('SELECT COUNT(*)::int AS questions FROM questions')
     res.json({ stats: { users, lessons, quizzes, questions } })
   } catch {
     res.status(500).json({ error: 'Server error' })
