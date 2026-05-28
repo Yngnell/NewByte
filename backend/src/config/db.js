@@ -39,10 +39,13 @@ export async function createPool() {
     query: async (sql, params = []) => {
       try {
         let pgSql = convertPlaceholders(normalizeSql(sql))
-        if (shouldReturnId(pgSql)) pgSql = `${pgSql} RETURNING id`
+        const returnInsertedId = shouldReturnId(pgSql)
+        if (returnInsertedId) pgSql = `${pgSql} RETURNING id`
 
         const result = await pool.query(pgSql, params)
         const insertId = result.rows?.[0]?.id
+        if (returnInsertedId) return [{ insertId }, { insertId }]
+
         return [result.rows || [], { insertId }]
       } catch (error) {
         console.error('Database error:', error.message)
