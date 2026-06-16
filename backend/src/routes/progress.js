@@ -12,7 +12,25 @@ router.get('/', requireAuth, async (req, res) => {
       [userId],
     )
     res.json({ progress: rows })
-  } catch {
+  } catch (e) {
+    console.error('GET /progress error:', e)
+    res.status(500).json({ error: 'Server error' })
+  }
+})
+
+router.get('/ranking', requireAuth, async (req, res) => {
+  try {
+    const pool = await req.poolPromise
+    const [rows] = await pool.query(
+      `SELECT u.full_name, SUM(p.score) as total_score 
+       FROM users u 
+       JOIN progress p ON u.id = p.user_id 
+       GROUP BY u.id 
+       ORDER BY total_score DESC`
+    )
+    res.json({ ranking: rows })
+  } catch (e) {
+    console.error('GET /progress/ranking error:', e)
     res.status(500).json({ error: 'Server error' })
   }
 })
