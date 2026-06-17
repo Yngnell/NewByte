@@ -21,6 +21,7 @@ export default function AdminQuizzes() {
   const [deleteId, setDeleteId] = useState(null)
   const [query, setQuery] = useState('')
   const [difficultyFilter, setDifficultyFilter] = useState('all')
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0)
   const [selectedQuestions, setSelectedQuestions] = useState(new Set())
 
   useEffect(() => {
@@ -36,6 +37,7 @@ export default function AdminQuizzes() {
       const r = await api.admin.getQuestions(lessonId)
       console.log(`[Admin] Loaded ${r.questions?.length || 0} questions:`, r.questions)
       setQuestions(r.questions)
+      setCurrentQuestionIndex(0)
       const scoreValue = Number(r.passing_score)
       setPassingScore(Number.isFinite(scoreValue) ? scoreValue : 70)
       setScoreDirty(false)
@@ -49,6 +51,8 @@ export default function AdminQuizzes() {
   function selectLesson(l) {
     setSelectedLesson(l)
     setQuery('')
+    setDifficultyFilter('all')
+    setCurrentQuestionIndex(0)
     loadQuestions(l.id)
   }
 
@@ -178,6 +182,20 @@ export default function AdminQuizzes() {
     }
     return filtered
   }, [questions, query, difficultyFilter])
+
+  useEffect(() => {
+    setCurrentQuestionIndex((idx) => {
+      if (!filteredQuestions.length) return 0
+      return Math.min(idx, filteredQuestions.length - 1)
+    })
+  }, [filteredQuestions.length])
+
+  const currentQuestion = filteredQuestions[currentQuestionIndex] || null
+  const currentDisplayOptions = currentQuestion
+    ? currentQuestion.options
+        .map((opt, idx) => ({ opt, idx }))
+        .filter((item) => String(item.opt || '').trim())
+    : []
 
   const questionStats = useMemo(() => {
     const totalQ = questions.length
@@ -336,57 +354,52 @@ export default function AdminQuizzes() {
             <div className="admin-glass-card p-8 text-center text-steel italic font-medium">
               No questions match your search.
             </div>
-          ) : (
+            ) : (
             <div className="space-y-4">
-              {filteredQuestions.map((q, i) => {
-                const displayOptions = q.options
-                  .map((opt, idx) => ({ opt, idx }))
-                  .filter((item) => String(item.opt || '').trim())
-                const diffIcon = { easy: '🟢', medium: '🟡', hard: '🔴' }[(q.difficulty || 'medium')]
-                const qIdx = questions.findIndex(x => x.id === q.id)
-                return (
-                <div key={q.id} className="admin-glass-card p-6 group transition-all duration-300 border-l-4 border-l-brand-300">
+              {/* Single-question view (one at a time) */}
+              {currentQuestion ? (
+                <div className="admin-glass-card p-6 group transition-all duration-300 border-l-4 border-l-brand-300">
                   <div className="flex justify-between items-start gap-4">
                     <div className="flex items-start gap-3 flex-1">
                       <input
                         type="checkbox"
-                        checked={selectedQuestions.has(q.id)}
-                        onChange={() => toggleSelectQuestion(q.id)}
+                        checked={selectedQuestions.has(currentQuestion.id)}
+                        onChange={() => toggleSelectQuestion(currentQuestion.id)}
                         className="mt-1 w-5 h-5 rounded border-gray-300 text-brand-600 cursor-pointer"
                       />
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-3 flex-wrap">
-                          <span className="text-xs font-mono font-bold text-brand-600 uppercase">Q {i + 1}</span>
-                          <span className="text-sm font-bold">{diffIcon} {q.difficulty || 'medium'}</span>
-                          {q.options.length === 2 && <span className="text-xs px-2 py-1 rounded-lg bg-purple-50 text-purple-700 font-bold">T/F</span>}
-                          {q.explanation && <span className="text-xs px-2 py-1 rounded-lg bg-blue-50 text-blue-700 font-bold">✓ Has Explanation</span>}
+                          <span className="text-xs font-mono font-bold text-brand-600 uppercase">Q {currentQuestionIndex + 1}</span>
+                          <span className="text-sm font-bold">{(currentQuestion.difficulty || 'medium') === 'easy' ? '🟢' : (currentQuestion.difficulty || 'medium') === 'hard' ? '🔴' : '🟡'} {currentQuestion.difficulty || 'medium'}</span>
+                          {currentQuestion.options.length === 2 && <span className="text-xs px-2 py-1 rounded-lg bg-purple-50 text-purple-700 font-bold">T/F</span>}
+                          {currentQuestion.explanation && <span className="text-xs px-2 py-1 rounded-lg bg-blue-50 text-blue-700 font-bold">✓ Has Explanation</span>}
                           <div className="flex-1" />
                         </div>
                         <p className="text-lg font-bold text-ink mb-6 leading-relaxed">
-                          {q.question_text}
+                          {currentQuestion.question_text}
                         </p>
                         <div className="flex flex-wrap gap-2 mb-6">
-                          {q.image_path && (
+                          {currentQuestion.image_path && (
                             <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-50 border border-gray-200 w-fit">
                               <span className="text-sm">🖼️</span>
-                              <span className="text-[10px] font-mono text-steel uppercase tracking-tighter truncate max-w-xs">{q.image_path}</span>
+                              <span className="text-[10px] font-mono text-steel uppercase tracking-tighter truncate max-w-xs">{currentQuestion.image_path}</span>
                             </div>
                           )}
                         </div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          {displayOptions.map(({ opt, idx }) => (
+                          {currentDisplayOptions.map(({ opt, idx }) => (
                           <div key={idx} className={`relative flex items-center px-4 py-3 rounded-xl border transition-all ${
-                            idx === q.correct_answer
+                            idx === currentQuestion.correct_answer
                               ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
                               : 'bg-white border-gray-200 text-steel'
                           }`}>
                             <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold mr-3 ${
-                              idx === q.correct_answer ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/20' : 'bg-gray-100 text-steel'
+                              idx === currentQuestion.correct_answer ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/20' : 'bg-gray-100 text-steel'
                             }`}>
                               {letters[idx]}
                             </span>
                             <span className="text-sm font-medium">{opt}</span>
-                            {idx === q.correct_answer && (
+                            {idx === currentQuestion.correct_answer && (
                               <div className="absolute top-2 right-2 w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                             )}
                           </div>
@@ -395,49 +408,17 @@ export default function AdminQuizzes() {
                       </div>
                     </div>
                     <div className="flex flex-col gap-2">
-                      {qIdx > 0 && (
-                        <button 
-                          onClick={() => moveQuestion(q.id, 'up')} 
-                          className="p-2 bg-white hover:bg-blue-50 rounded-lg text-steel hover:text-blue-700 transition-all border border-gray-200 text-sm font-bold"
-                          title="Move Up"
-                        >
-                          ⬆️
-                        </button>
-                      )}
-                      {qIdx < questions.length - 1 && (
-                        <button 
-                          onClick={() => moveQuestion(q.id, 'down')} 
-                          className="p-2 bg-white hover:bg-blue-50 rounded-lg text-steel hover:text-blue-700 transition-all border border-gray-200 text-sm font-bold"
-                          title="Move Down"
-                        >
-                          ⬇️
-                        </button>
-                      )}
-                      <button 
-                        onClick={() => duplicateQuestion(q)} 
-                        className="p-3 bg-white hover:bg-purple-50 rounded-xl text-steel hover:text-purple-700 transition-all border border-gray-200"
-                        title="Duplicate Question"
-                      >
-                        📋
-                      </button>
-                      <button 
-                        onClick={() => openEdit(q)} 
-                        className="p-3 bg-white hover:bg-brand-50 rounded-xl text-steel hover:text-brand-700 transition-all border border-gray-200"
-                        title="Edit Question"
-                      >
-                        ✏️
-                      </button>
-                      <button 
-                        onClick={() => setDeleteId(q.id)} 
-                        className="p-3 bg-white hover:bg-red-50 rounded-xl text-steel hover:text-red-600 transition-all border border-gray-200"
-                        title="Delete Question"
-                      >
-                        🗑️
-                      </button>
+                      <div className="flex flex-col gap-2">
+                        <button onClick={() => setCurrentQuestionIndex(i => Math.max(0, i-1))} className="p-2 bg-white hover:bg-blue-50 rounded-lg text-steel hover:text-blue-700 transition-all border border-gray-200 text-sm font-bold">⬆️ Prev</button>
+                        <button onClick={() => setCurrentQuestionIndex(i => Math.min(filteredQuestions.length-1, i+1))} className="p-2 bg-white hover:bg-blue-50 rounded-lg text-steel hover:text-blue-700 transition-all border border-gray-200 text-sm font-bold">⬇️ Next</button>
+                        <button onClick={() => openEdit(currentQuestion)} className="p-3 bg-white hover:bg-brand-50 rounded-xl text-steel hover:text-brand-700 transition-all border border-gray-200" title="Edit Question">✏️</button>
+                        <button onClick={() => duplicateQuestion(currentQuestion)} className="p-3 bg-white hover:bg-purple-50 rounded-xl text-steel hover:text-purple-700 transition-all border border-gray-200" title="Duplicate Question">📋</button>
+                        <button onClick={() => setDeleteId(currentQuestion.id)} className="p-3 bg-white hover:bg-red-50 rounded-xl text-steel hover:text-red-600 transition-all border border-gray-200" title="Delete Question">🗑️</button>
+                      </div>
                     </div>
                   </div>
                 </div>
-              )})}
+              ) : null}
             </div>
           )}
         </>

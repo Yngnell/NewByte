@@ -21,13 +21,21 @@ router.get('/', requireAuth, async (req, res) => {
 router.get('/ranking', requireAuth, async (req, res) => {
   try {
     const pool = await req.poolPromise
-    const [rows] = await pool.query(
-      `SELECT u.full_name, SUM(p.score) as total_score 
-       FROM users u 
-       JOIN progress p ON u.id = p.user_id 
-       GROUP BY u.id 
-       ORDER BY total_score DESC`
-    )
+    const [rows] = await pool.query(`
+      SELECT
+        u.id,
+        u.full_name,
+        COALESCE(SUM(p.score), 0)::int AS progress_score,
+        COALESCE(SUM(h.score), 0)::int AS quiz_score,
+        (COALESCE(SUM(p.score),0) + COALESCE(SUM(h.score),0))::int AS total_score
+      FROM users u
+      LEFT JOIN progress p ON p.user_id = u.id
+      LEFT JOIN quiz_history h ON h.user_id = u.id
+      WHERE u.role = 'student'
+      GROUP BY u.id, u.full_name
+      ORDER BY total_score DESC, u.id ASC
+      LIMIT 100
+    `)
     res.json({ ranking: rows })
   } catch (e) {
     console.error('GET /progress/ranking error:', e)
