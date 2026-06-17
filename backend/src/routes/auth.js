@@ -66,6 +66,7 @@ router.post('/register', async (req, res) => {
       user: { id: userId, full_name, guardian_name, email: normalizedEmail, age, grade_level, role: 'student' },
     })
   } catch (e) {
+    console.error('POST /auth/register error:', e)
     const msg = e && e.code === 'ECONNREFUSED' ? 'Database unavailable' : 'Server error'
     const status = msg === 'Database unavailable' ? 503 : 500
     res.status(status).json({ error: msg })
@@ -133,6 +134,7 @@ router.post('/login', async (req, res) => {
       },
     })
   } catch (e) {
+    console.error('POST /auth/login error:', e)
     const msg = e && e.code === 'ECONNREFUSED' ? 'Database unavailable' : 'Server error'
     const status = msg === 'Database unavailable' ? 503 : 500
     res.status(status).json({ error: msg })
@@ -207,6 +209,7 @@ router.post('/forgot-password', async (req, res) => {
 
     res.json({ message: 'Password updated successfully. You can now log in.' })
   } catch (e) {
+    console.error('POST /auth/forgot-password error:', e)
     const msg = e && e.code === 'ECONNREFUSED' ? 'Database unavailable' : 'Server error'
     const status = msg === 'Database unavailable' ? 503 : 500
     res.status(status).json({ error: msg })
