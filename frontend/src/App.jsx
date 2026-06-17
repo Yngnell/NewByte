@@ -9,6 +9,7 @@ import Login from './pages/Login.jsx'
 import Register from './pages/Register.jsx'
 import ForgotPassword from './pages/ForgotPassword.jsx'
 import Profile from './pages/Profile.jsx'
+import Ranking from './pages/Ranking.jsx'
 import Quiz from './pages/Quiz.jsx'
 import Help from './pages/Help.jsx'
 import Accessibility from './pages/Accessibility.jsx'
@@ -100,6 +101,7 @@ function AppShell() {
             <Route path="/lessons" element={<Lessons />} />
             <Route path="/lessons/:lessonId" element={<ProtectedRoute><LessonDetail /></ProtectedRoute>} />
             <Route path="/quiz/:lessonId" element={<ProtectedRoute><Quiz /></ProtectedRoute>} />
+            <Route path="/ranking" element={<ProtectedRoute><Ranking /></ProtectedRoute>} />
             <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
             <Route path="/help" element={<Help />} />
             <Route path="/accessibility" element={<Accessibility />} />

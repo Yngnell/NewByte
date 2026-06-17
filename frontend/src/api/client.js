@@ -74,6 +74,8 @@ export const api = {
   saveSettings: (settings) =>
     request('/settings', { method: 'PUT', body: JSON.stringify({ settings }) }),
   getHistory: () => request('/history'),
+  getRankings: () => request('/history/rankings'),
+  progressRanking: () => request('/progress/ranking'),
   recordHistory: (entry) =>
     request('/history', { method: 'POST', body: JSON.stringify(entry) }),
 

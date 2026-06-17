@@ -3,6 +3,38 @@ import { requireAuth } from '../middleware/auth.js'
 
 const router = Router()
 
+const ANSWER_LETTERS = ['A', 'B', 'C', 'D']
+
+function mapQuestion(q) {
+  const correctIndex = ANSWER_LETTERS.indexOf(q.correct_answer)
+  const rawOptions = [q.option_a, q.option_b, q.option_c, q.option_d]
+  const options = []
+  let mappedCorrect = correctIndex
+
+  rawOptions.forEach((opt, idx) => {
+    const cleaned = String(opt || '').trim()
+    if (cleaned) {
+      options.push(cleaned)
+    } else if (idx < correctIndex) {
+      mappedCorrect -= 1
+    }
+  })
+
+  if (mappedCorrect < 0 || mappedCorrect >= options.length) {
+    mappedCorrect = 0
+  }
+
+  return {
+    id: q.id,
+    question_text: q.question_text,
+    image_path: q.image_path,
+    options,
+    correct_index: mappedCorrect,
+    explanation: q.explanation || '',
+    paragraph_after: q.paragraph_after || 0,
+  }
+}
+
 router.get('/:lessonId', requireAuth, async (req, res) => {
   try {
     const { lessonId } = req.params
@@ -16,40 +48,8 @@ router.get('/:lessonId', requireAuth, async (req, res) => {
     const [quizzes] = await pool.query('SELECT * FROM quizzes WHERE lesson_id=?', [lessonId])
     if (!quizzes.length) return res.json({ questions: [], passing_score: 70 })
     const quiz = quizzes[0]
-    const [qs] = await pool.query('SELECT * FROM questions WHERE quiz_id=?', [quiz.id])
-    const questions = qs.map((q) => {
-      // Convert correct_answer letter to index (A=0, B=1, C=2, D=3)
-      const correctIndex = ['A', 'B', 'C', 'D'].indexOf(q.correct_answer)
-      
-      // Collect non-empty options and map correct answer to the filtered list
-      const rawOptions = [q.option_a, q.option_b, q.option_c, q.option_d]
-      const options = []
-      let mappedCorrect = correctIndex
-      
-      rawOptions.forEach((opt, idx) => {
-        const cleaned = String(opt || '').trim()
-        if (cleaned) {
-          options.push(cleaned)
-        } else if (idx < correctIndex) {
-          mappedCorrect -= 1
-        }
-      })
-      
-      // Safety check: ensure mappedCorrect is valid
-      if (mappedCorrect < 0 || mappedCorrect >= options.length) {
-        mappedCorrect = 0
-      }
-      
-      return {
-        id: q.id,
-        question_text: q.question_text,
-        image_path: q.image_path,
-        options,
-        correct_index: mappedCorrect,
-        explanation: q.explanation || '',
-        paragraph_after: q.paragraph_after || 0,
-      }
-    })
+    const [qs] = await pool.query('SELECT * FROM questions WHERE quiz_id=? ORDER BY RANDOM()', [quiz.id])
+    const questions = qs.map(mapQuestion)
     res.json({ questions, passing_score: quiz.passing_score || 70 })
   } catch {
     res.status(500).json({ error: 'Server error' })
@@ -66,10 +66,17 @@ router.post('/:lessonId/submit', requireAuth, async (req, res) => {
     if (!quizzes.length) return res.status(400).json({ error: 'Quiz not found' })
     const quiz = quizzes[0]
     const [qs] = await pool.query('SELECT * FROM questions WHERE quiz_id=?', [quiz.id])
+    const answerByQuestionId = new Map(
+      answers
+        .filter((answer) => answer && typeof answer === 'object')
+        .map((answer) => [Number(answer.question_id ?? answer.id), Number(answer.answer)])
+        .filter(([id]) => Number.isFinite(id)),
+    )
     let correct = 0
     qs.forEach((q, i) => {
-      const idx = ['A', 'B', 'C', 'D'].indexOf(q.correct_answer)
-      if (answers[i] === idx) correct++
+      const mapped = mapQuestion(q)
+      const submitted = answerByQuestionId.size ? answerByQuestionId.get(Number(q.id)) : Number(answers[i])
+      if (submitted === mapped.correct_index) correct++
     })
     const score = Math.round((correct / (qs.length || 1)) * 100)
     const status = score >= (quiz.passing_score || 70) ? 'Completed' : 'Unlocked'

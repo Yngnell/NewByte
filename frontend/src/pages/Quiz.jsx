@@ -37,6 +37,10 @@ function randomFrom(arr) {
   return arr[Math.floor(Math.random() * arr.length)]
 }
 
+function shuffleQuestions(items) {
+  return [...items].sort(() => Math.random() - 0.5)
+}
+
 export default function Quiz() {
   const { lessonId } = useParams()
   const navigate = useNavigate()
@@ -76,6 +80,7 @@ export default function Quiz() {
         const res = await api.quiz(dbLessonId)
         if (res.questions?.length) {
           const mapped = res.questions.map((q) => ({
+            id: q.id,
             prompt: q.question_text,
             image: q.image_path,
             alt: q.question_text,
@@ -83,17 +88,17 @@ export default function Quiz() {
             answer: q.correct_index,
             explanation: q.explanation || '',
           }))
-          setQuestions(mapped)
+          setQuestions(shuffleQuestions(mapped))
         } else {
           // Fallback to local quiz bank only if API returns no questions
-          setQuestions(quizBank[lessonId] || [])
+          setQuestions(shuffleQuestions(quizBank[lessonId] || []))
         }
         const scoreValue = Number(res.passing_score)
         if (Number.isFinite(scoreValue)) setPassingScore(scoreValue)
       } catch (err) {
         console.error('Quiz API error:', err)
         // Only fallback to local quiz bank on error
-        setQuestions(quizBank[lessonId] || [])
+        setQuestions(shuffleQuestions(quizBank[lessonId] || []))
       } finally {
         setLoading(false)
       }
@@ -159,7 +164,14 @@ export default function Quiz() {
         showToast(`🎉 You passed with ${score}%! The next lesson is now unlocked.`, 'success')
         markLessonCompleted(lessonId)
         try {
-          await api.submitQuiz(dbLessonId, answers)
+          const canSubmitByQuestionId = questions.every((q) => q.id !== undefined && q.id !== null)
+          const submittedAnswers = canSubmitByQuestionId
+            ? questions.map((q, index) => ({
+                question_id: q.id,
+                answer: answers[index],
+              }))
+            : answers
+          await api.submitQuiz(dbLessonId, submittedAnswers)
         } catch {
           // Local progress is already saved above
         }
@@ -199,6 +211,7 @@ export default function Quiz() {
   useEffect(() => { setSelectedOption(null) }, [current])
 
   function handleRetry() {
+    setQuestions(prev => shuffleQuestions(prev))
     setCurrent(0); setAnswers([]); setDone(false); setFeedback('')
     setAnswered(false); setIsCorrect(false); setStreak(0); setMaxStreak(0)
     setPoints(0); setFeedbackMsg(''); setShowReview(false); setShowConfetti(false)

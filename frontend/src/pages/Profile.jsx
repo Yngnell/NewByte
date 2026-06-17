@@ -1,14 +1,18 @@
 import { useApp } from '../context/AppContext.jsx'
+import { useEffect, useState } from 'react'
 import { lessons } from '../data/lessons.js'
 import Card from '../components/ui/Card.jsx'
 import Button from '../components/ui/Button.jsx'
 import ProgressBar from '../components/ProgressBar.jsx'
 import { Link } from 'react-router-dom'
 import useDocTitle from '../hooks/useDocTitle.js'
+import { api } from '../api/client.js'
 
 export default function Profile() {
   useDocTitle('My Profile')
   const { user, progress, quizHistory } = useApp()
+  const [rankings, setRankings] = useState([])
+  const [currentRank, setCurrentRank] = useState(null)
   const total = lessons.length
   const completed = Object.values(progress).filter((s) => s === 'completed').length
   const percent = total > 0 ? (completed / total) * 100 : 0
@@ -21,6 +25,22 @@ export default function Profile() {
   const passedQuizzes = quizHistory?.filter((h) => h.passed).length || 0
   const avgScore = totalQuizzes > 0 ? Math.round(quizHistory.reduce((sum, h) => sum + h.score, 0) / totalQuizzes) : 0
   const bestScore = totalQuizzes > 0 ? Math.max(...quizHistory.map((h) => h.score)) : 0
+
+  useEffect(() => {
+    let active = true
+    api.getRankings()
+      .then((res) => {
+        if (!active) return
+        setRankings(res.rankings || [])
+        setCurrentRank(res.currentUser || null)
+      })
+      .catch(() => {
+        if (!active) return
+        setRankings([])
+        setCurrentRank(null)
+      })
+    return () => { active = false }
+  }, [quizHistory])
 
   const achievements = []
   if (completed >= 1) achievements.push({ icon: '🌱', label: 'First Lesson', desc: 'Completed your first lesson' })
@@ -121,6 +141,50 @@ export default function Profile() {
           <div className="text-sm profile-stat-label mt-1">Best Score</div>
         </div>
       </div>
+
+      {/* Overall Ranking */}
+      <Card className="p-6 profile-section">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+          <div>
+            <h2 className="text-2xl font-bold heading profile-section-heading">Overall Ranking</h2>
+            <p className="profile-muted-text text-sm">Based on passed quizzes, average score, and best lesson scores.</p>
+          </div>
+          <div className="profile-percent-badge">
+            {currentRank ? `#${currentRank.rank}` : '--'}
+          </div>
+        </div>
+        {rankings.length ? (
+          <div className="overflow-x-auto">
+            <table className="profile-table min-w-full text-sm">
+              <thead>
+                <tr className="profile-table-header">
+                  <th className="py-3 px-4 rounded-tl-xl text-left font-bold">Rank</th>
+                  <th className="py-3 px-4 text-left font-bold">Learner</th>
+                  <th className="py-3 px-4 text-left font-bold">Passed</th>
+                  <th className="py-3 px-4 text-left font-bold">Average</th>
+                  <th className="py-3 px-4 rounded-tr-xl text-left font-bold">Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rankings.slice(0, 10).map((row) => {
+                  const isCurrent = String(row.id) === String(user?.id)
+                  return (
+                    <tr key={row.id} className={`profile-table-row border-t transition-colors ${isCurrent ? 'bg-brand-50' : ''}`}>
+                      <td className="py-3 px-4 font-extrabold text-brand-700">#{row.rank}</td>
+                      <td className="py-3 px-4 font-medium">{row.full_name || row.email}</td>
+                      <td className="py-3 px-4">{row.quizzes_passed}</td>
+                      <td className="py-3 px-4 font-bold">{row.average_score}%</td>
+                      <td className="py-3 px-4">{row.total_score}</td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="profile-muted-text">Take a quiz to start appearing in the ranking.</p>
+        )}
+      </Card>
 
       {/* Per-Lesson Breakdown */}
       <Card className="p-6 profile-section">
